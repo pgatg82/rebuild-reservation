@@ -496,48 +496,45 @@ window.copyUrl = function(url, btn) {
 window.exportExcel = async function(artistIdx) {
   const targets = artistIdx === -1 ? ARTISTS.map((_, i) => i) : [artistIdx];
   const allRows = await Promise.all(targets.map(i => loadRows(i)));
-
-  // CSVデータ作成（Excel対応UTF-8 BOM付き）
-  let csv = '﻿';
+  const NL = "\r\n";
+  let csv = "\uFEFF";
+  const cols_all = ["\u51fa\u6f14\u8005", "\u4ee3\u8868\u8005\u540d", "\u4eba\u6570", "\u5099\u8003"].join(",");
+  const cols_one = ["\u4ee3\u8868\u8005\u540d", "\u4eba\u6570", "\u5099\u8003"].join(",");
+  const undefined_str = "\u672a\u78ba\u5b9a";
+  const total_str = "\u5408\u8a08";
 
   if (artistIdx === -1) {
-    // 全出演者まとめ
-    csv += '出演者,代表者名,人数,備考
-';
+    csv += cols_all + NL;
     targets.forEach((ti, si) => {
       allRows[si].forEach(r => {
-        const name = r.__fixed ? '未確定' : (r.name || '');
+        const name = r.__fixed ? undefined_str : (r.name || "");
         if (!name && !r.count) return;
-        csv += `"${ARTISTS[ti]}","${name}","${r.count || ''}","${(r.note || '').replace(/"/g,'""')}"
-`;
+        const note = (r.note || "").replace(/"/g, '""');
+        csv += ['"'+ARTISTS[ti]+'"','"'+name+'"','"'+(r.count||'')+'"','"'+note+'"'].join(",") + NL;
       });
     });
   } else {
-    // 個別出演者
-    csv += `6/20 SAT RE:BUILD — ${ARTISTS[artistIdx]} 取り置きリスト
-`;
-    csv += '代表者名,人数,備考
-';
+    csv += "6/20 SAT RE:BUILD " + ARTISTS[artistIdx] + NL + NL;
+    csv += cols_one + NL;
     allRows[0].forEach(r => {
-      const name = r.__fixed ? '未確定' : (r.name || '');
+      const name = r.__fixed ? undefined_str : (r.name || "");
       if (!name && !r.count) return;
-      csv += `"${name}","${r.count || ''}","${(r.note || '').replace(/"/g,'""')}"
-`;
+      const note = (r.note || "").replace(/"/g, '""');
+      csv += ['"'+name+'"','"'+(r.count||'')+'"','"'+note+'"'].join(",") + NL;
     });
-    // 合計行
     const total = allRows[0].reduce((s, r) => s + (parseInt(r.count) || 0), 0);
-    csv += `"合計","${total}",""
-`;
+    csv += ['"'+total_str+'"','"'+total+'"','""'].join(",") + NL;
   }
 
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  const fname = artistIdx === -1 ? '全出演者_取り置きリスト.csv' : `${ARTISTS[artistIdx]}_取り置きリスト.csv`;
+  const a = document.createElement("a");
+  const fname = artistIdx === -1
+    ? "\u5168\u51fa\u6f14\u8005_\u53d6\u308a\u7f6e\u304d\u30ea\u30b9\u30c8.csv"
+    : ARTISTS[artistIdx] + "_\u53d6\u308a\u7f6e\u304d\u30ea\u30b9\u30c8.csv";
   a.href = url; a.download = fname; a.click();
   URL.revokeObjectURL(url);
 };
-
 window.addRow = addRow;
 window.toggleAdmin = toggleAdmin;
 
