@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>取り置きリスト</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0e0e0e; --surface: #1a1a1a; --surface2: #242424;
+  --border: #2e2e2e; --border2: #3a3a3a;
+  --text: #f0f0f0; --text2: #888; --text3: #555;
+  --accent: #c8f060; --accent2: #9bc43a;
+  --danger: #ff5f5f;
+  --mono: 'DM Mono', monospace; --sans: 'Noto Sans JP', sans-serif;
+}
+body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; font-size: 14px; }
+.page { display: none; min-height: 100vh; }
+.page.active { display: block; }
+
+/* HEADER */
+.artist-header { padding: 2rem 1.5rem 1.5rem; border-bottom: 1px solid var(--border); }
+.artist-label { font-family: var(--mono); font-size: 11px; color: var(--text3); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 6px; }
+.artist-title { font-size: 22px; font-weight: 700; color: var(--text); }
+.artist-tag { margin-top: 6px; font-size: 13px; color: var(--accent); font-family: var(--mono); font-weight: 500; }
+.artist-hint { margin-top: 6px; font-size: 12px; color: var(--text3); }
+
+/* SHEET */
+.sheet-wrap { padding: 1.5rem; }
+.sheet { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.sheet-head { display: grid; grid-template-columns: 32px 1fr 72px 1fr 36px; background: var(--surface2); border-bottom: 1px solid var(--border); }
+.sh { padding: 8px 10px; font-size: 11px; font-family: var(--mono); color: var(--text3); letter-spacing: 0.05em; border-right: 1px solid var(--border); }
+.sh:last-child { border-right: none; }
+.row { display: grid; grid-template-columns: 32px 1fr 72px 1fr 36px; border-bottom: 1px solid var(--border); transition: background 0.1s; }
+.row:last-child { border-bottom: none; }
+.row:hover { background: var(--surface2); }
+.cell { border-right: 1px solid var(--border); display: flex; align-items: center; }
+.cell:last-child { border-right: none; }
+.cell-idx { justify-content: center; font-size: 11px; font-family: var(--mono); color: var(--text3); padding: 0 6px; }
+.cell input { width: 100%; background: transparent; border: none; outline: none; color: var(--text); font-family: var(--sans); font-size: 13px; padding: 10px; min-width: 0; }
+.cell input::placeholder { color: var(--text3); }
+.cell input:focus { background: rgba(200,240,96,0.04); }
+.cell input[type=number] { text-align: right; }
+.cell-del { justify-content: center; }
+.del-btn { background: none; border: none; cursor: pointer; color: var(--text3); font-size: 16px; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; transition: color 0.15s; }
+.del-btn:hover { color: var(--danger); }
+.add-row-btn { width: 100%; background: none; border: none; border-top: 1px solid var(--border); padding: 10px; color: var(--text3); font-family: var(--sans); font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.15s; }
+.add-row-btn:hover { color: var(--accent); background: rgba(200,240,96,0.04); }
+
+/* SUMMARY */
+.summary { margin-top: 1rem; }
+.sum-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
+.sum-label { font-size: 11px; color: var(--text3); font-family: var(--mono); letter-spacing: 0.05em; margin-bottom: 4px; }
+.sum-value { font-size: 28px; font-weight: 700; color: var(--accent); font-family: var(--mono); }
+
+/* SAVE STATUS */
+.save-status { text-align: center; padding: 10px; font-size: 12px; font-family: var(--mono); color: var(--text3); min-height: 32px; }
+.save-status.saved { color: var(--accent); }
+.save-status.saving { color: var(--text2); }
+.save-status.error { color: var(--danger); }
+
+/* LOADING */
+.loading-overlay { position: fixed; inset: 0; background: var(--bg); display: flex; align-items: center; justify-content: center; z-index: 200; flex-direction: column; gap: 12px; }
+.loading-spinner { width: 32px; height: 32px; border: 2px solid var(--border2); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-text { font-family: var(--mono); font-size: 12px; color: var(--text3); }
+
+/* ADMIN */
+.admin-header { padding: 2rem 1.5rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; align-items: flex-end; justify-content: space-between; }
+.admin-title { font-size: 22px; font-weight: 700; }
+.admin-label { font-family: var(--mono); font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; }
+.refresh-btn { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 8px 14px; color: var(--text2); font-size: 12px; cursor: pointer; font-family: var(--mono); transition: all 0.15s; }
+.refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
+.admin-body { padding: 1.5rem; }
+.admin-totals { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 1.5rem; }
+.total-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
+.total-artist { font-size: 11px; color: var(--text2); margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.total-num { font-size: 24px; font-weight: 700; color: var(--accent); font-family: var(--mono); }
+.total-sub { font-size: 11px; color: var(--text3); font-family: var(--mono); }
+.admin-section { margin-bottom: 2rem; }
+.admin-section-title { font-size: 13px; font-weight: 500; color: var(--text2); font-family: var(--mono); letter-spacing: 0.05em; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+.admin-section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+.admin-sheet { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.admin-sheet-head { display: grid; grid-template-columns: 32px 1fr 72px 1fr; background: var(--surface2); border-bottom: 1px solid var(--border); }
+.admin-row { display: grid; grid-template-columns: 32px 1fr 72px 1fr; border-bottom: 1px solid var(--border); }
+.admin-row:last-child { border-bottom: none; }
+.admin-cell { padding: 9px 10px; font-size: 13px; border-right: 1px solid var(--border); color: var(--text); }
+.admin-cell:last-child { border-right: none; }
+.admin-cell.idx { font-family: var(--mono); font-size: 11px; color: var(--text3); text-align: center; }
+.admin-cell.num { text-align: right; font-family: var(--mono); }
+.admin-cell.empty { color: var(--text3); font-style: italic; }
+.url-section { margin-top: 2rem; }
+.url-list { display: flex; flex-direction: column; gap: 8px; }
+.url-item { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.url-artist { font-size: 12px; color: var(--text2); min-width: 120px; }
+.url-val { font-family: var(--mono); font-size: 11px; color: var(--text3); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.copy-btn { background: var(--surface2); border: 1px solid var(--border2); border-radius: 6px; padding: 6px 10px; font-size: 11px; font-family: var(--mono); color: var(--text2); cursor: pointer; white-space: nowrap; transition: all 0.15s; }
+.copy-btn:hover { border-color: var(--accent); color: var(--accent); }
+.copy-btn.done { color: var(--accent); border-color: var(--accent); }
+
+/* PASSWORD */
+.pw-overlay { position: fixed; inset: 0; background: var(--bg); display: flex; align-items: center; justify-content: center; z-index: 100; }
+.pw-box { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 2rem; width: min(320px, 90vw); }
+.pw-title { font-size: 16px; font-weight: 500; margin-bottom: 4px; }
+.pw-sub { font-size: 12px; color: var(--text3); margin-bottom: 1.5rem; font-family: var(--mono); }
+.pw-input { width: 100%; background: var(--surface2); border: 1px solid var(--border2); border-radius: 6px; padding: 10px 12px; color: var(--text); font-family: var(--mono); font-size: 14px; margin-bottom: 10px; outline: none; }
+.pw-input:focus { border-color: var(--accent); }
+.pw-btn { width: 100%; background: var(--accent); border: none; border-radius: 6px; padding: 10px; color: #0e0e0e; font-weight: 700; font-size: 14px; cursor: pointer; transition: background 0.15s; }
+.pw-btn:hover { background: var(--accent2); }
+.pw-error { font-size: 12px; color: var(--danger); font-family: var(--mono); margin-top: 8px; min-height: 18px; }
+
+/* NAV */
+.bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(14,14,14,0.95); border-top: 1px solid var(--border); padding: 12px 1.5rem; display: flex; align-items: center; justify-content: space-between; backdrop-filter: blur(8px); }
+.nav-logo { font-family: var(--mono); font-size: 13px; color: var(--accent); font-weight: 500; }
+.nav-admin-btn { background: none; border: 1px solid var(--border2); border-radius: 6px; padding: 6px 12px; color: var(--text2); font-size: 11px; font-family: var(--mono); cursor: pointer; transition: all 0.15s; }
+.nav-admin-btn:hover { border-color: var(--accent); color: var(--accent); }
+.pb { padding-bottom: 60px; }
+
+@media (max-width: 480px) {
+  .artist-header, .sheet-wrap, .admin-body { padding: 1rem; }
+  .admin-header { padding: 1rem; flex-direction: column; align-items: flex-start; gap: 12px; }
+}
+</style>
+</head>
+<body>
+
+<div class="loading-overlay" id="loading">
+  <div class="loading-spinner"></div>
+  <div class="loading-text">loading...</div>
+</div>
+
+<!-- 出演者ページ -->
+<div class="page active" id="page-artist">
+  <div class="pb">
+    <div class="artist-header">
+      <div class="artist-label">6/20 SAT RE:BUILD — 取り置きリスト</div>
+      <div class="artist-title" id="artist-name"></div>
+      <div class="artist-tag" id="artist-tag"></div>
+      <div class="artist-hint">代表者名・人数・備考を入力してください</div>
+    </div>
+    <div class="sheet-wrap">
+      <div class="sheet">
+        <div class="sheet-head">
+          <div class="sh">#</div>
+          <div class="sh">代表者名</div>
+          <div class="sh" style="text-align:right;">人数</div>
+          <div class="sh">備考</div>
+          <div class="sh"></div>
+        </div>
+        <div id="artist-rows"></div>
+        <button class="add-row-btn" onclick="addRow()">＋ 行を追加</button>
+      </div>
+      <div class="summary">
+        <div class="sum-card">
+          <div class="sum-label">合計人数</div>
+          <div class="sum-value" id="sum-total">0</div>
+        </div>
+      </div>
+      <div class="save-status" id="save-status">— 自動保存</div>
+    </div>
+  </div>
+</div>
+
+<!-- 管理者ページ -->
+<div class="page" id="page-admin">
+  <div class="pw-overlay" id="pw-overlay">
+    <div class="pw-box">
+      <div class="pw-title">管理者ログイン</div>
+      <div class="pw-sub">// admin access required</div>
+      <input type="password" class="pw-input" id="pw-input" placeholder="パスワードを入力" onkeydown="if(event.key==='Enter')checkPw()" />
+      <button class="pw-btn" onclick="checkPw()">ログイン</button>
+      <div class="pw-error" id="pw-error"></div>
+    </div>
+  </div>
+  <div class="pb">
+    <div class="admin-header">
+      <div>
+        <div class="admin-label">6/20 SAT RE:BUILD</div>
+        <div class="admin-title">全取り置き一覧</div>
+      </div>
+      <button class="refresh-btn" onclick="loadAdminData()">↻ 更新</button>
+    </div>
+    <div class="admin-body">
+      <div class="admin-totals" id="admin-totals"></div>
+      <div id="admin-sections"></div>
+      <div class="url-section">
+        <div class="admin-section-title">共有URL</div>
+        <div class="url-list" id="url-list"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ナビゲーション -->
+<div class="bottom-nav">
+  <div class="nav-logo">// RE:BUILD</div>
+  <button class="nav-admin-btn" id="nav-btn" onclick="toggleAdmin()">管理者画面</button>
+</div>
+
+<!-- Firebase SDK -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBfMEyd95Cl4FGu4jgm-oO12eYtNq4rTBc",
+  authDomain: "rebuild-reservation.firebaseapp.com",
+  projectId: "rebuild-reservation",
+  storageBucket: "rebuild-reservation.firebasestorage.app",
+  messagingSenderId: "259293457101",
+  appId: "1:259293457101:web:eb79e164f47d043ec79784"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+const ARTISTS = ['Build Your Mind', 'V-trap', '飽き性', 'The Black Borders'];
+const ADMIN_PW = 'admin1234';
+const COLLECTION = 'reservations';
+
+let currentArtist = 0;
+let adminUnlocked = false;
+let saveTimer = null;
+let unsubscribe = null;
+
+function getArtistFromUrl() {
+  const params = new URLSearchParams(location.search);
+  const a = params.get('a');
+  if (a !== null) {
+    const idx = parseInt(a);
+    if (!isNaN(idx) && idx >= 0 && idx < ARTISTS.length) return idx;
+  }
+  return 0;
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+}
+
+function docId(idx) {
+  return 'artist_' + idx;
+}
+
+async function loadRows(idx) {
+  try {
+    const snap = await getDoc(doc(db, COLLECTION, docId(idx)));
+    const rows = snap.exists() ? (snap.data().rows || []) : [];
+    // 0行目は必ず未確定固定行
+    if (rows.length === 0 || rows[0].__fixed !== true) {
+      rows.unshift({ __fixed: true, name: '未確定', count: '', note: '' });
+      await saveRows(idx, rows);
+    }
+    return rows;
+  } catch(e) {
+    return [{ __fixed: true, name: '未確定', count: '', note: '' }];
+  }
+}
+
+async function saveRows(idx, rows) {
+  await setDoc(doc(db, COLLECTION, docId(idx)), { rows });
+}
+
+// リアルタイム購読
+function subscribeArtist(idx) {
+  if (unsubscribe) unsubscribe();
+  unsubscribe = onSnapshot(doc(db, COLLECTION, docId(idx)), (snap) => {
+    const rows = snap.exists() ? (snap.data().rows || []) : [];
+    if (rows.length === 0 || rows[0].__fixed !== true) {
+      rows.unshift({ __fixed: true, name: '未確定', count: '', note: '' });
+    }
+    renderRowsFromData(rows);
+  });
+}
+
+function renderArtistPage() {
+  document.getElementById('artist-name').textContent = ARTISTS[currentArtist];
+  document.getElementById('artist-tag').textContent = '// ' + ARTISTS[currentArtist] + ' の取り置きページ';
+  subscribeArtist(currentArtist);
+}
+
+function renderRowsFromData(rows) {
+  document.getElementById('loading').style.display = 'none';
+  const container = document.getElementById('artist-rows');
+
+  const fixedRow = `
+    <div class="row" style="background:rgba(200,240,96,0.04);">
+      <div class="cell cell-idx" style="color:var(--accent);font-weight:500;">★</div>
+      <div class="cell" style="padding:0 10px;font-size:13px;color:var(--accent);font-weight:500;align-items:center;display:flex;">未確定</div>
+      <div class="cell"><input type="number" value="${esc(rows[0] ? rows[0].count || '' : '')}" placeholder="0" min="1" style="text-align:right" data-idx="0" data-key="count" /></div>
+      <div class="cell"><input type="text" value="${esc(rows[0] ? rows[0].note || '' : '')}" placeholder="備考" data-idx="0" data-key="note" /></div>
+      <div class="cell cell-del"><span style="font-size:11px;color:var(--text3);padding:0 8px;">固定</span></div>
+    </div>`;
+
+  const normalRows = rows.slice(1).map((r, i) => {
+    const idx = i + 1;
+    return `
+    <div class="row">
+      <div class="cell cell-idx">${idx}</div>
+      <div class="cell"><input type="text" value="${esc(r.name || '')}" placeholder="山田 太郎" data-idx="${idx}" data-key="name" /></div>
+      <div class="cell"><input type="number" value="${esc(r.count || '')}" placeholder="0" min="1" style="text-align:right" data-idx="${idx}" data-key="count" /></div>
+      <div class="cell"><input type="text" value="${esc(r.note || '')}" placeholder="例: 車椅子" data-idx="${idx}" data-key="note" /></div>
+      <div class="cell cell-del"><button class="del-btn" data-delidx="${idx}">×</button></div>
+    </div>`;
+  }).join('');
+
+  container.innerHTML = fixedRow + normalRows;
+
+  // イベント登録
+  container.querySelectorAll('input[data-key]').forEach(input => {
+    input.addEventListener('input', (e) => {
+      handleInput(parseInt(e.target.dataset.idx), e.target.dataset.key, e.target.value);
+    });
+  });
+  container.querySelectorAll('[data-delidx]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      deleteRow(parseInt(e.target.dataset.delidx));
+    });
+  });
+
+  updateSummary(rows);
+}
+
+let pendingRows = null;
+let debounceTimer = null;
+
+async function handleInput(idx, key, val) {
+  setSaveStatus('saving');
+  clearTimeout(debounceTimer);
+
+  // 現在のDOMから全rowsを再構築
+  const snap = await getDoc(doc(db, COLLECTION, docId(currentArtist)));
+  const rows = snap.exists() ? (snap.data().rows || []) : [];
+  if (rows.length === 0 || rows[0].__fixed !== true) {
+    rows.unshift({ __fixed: true, name: '未確定', count: '', note: '' });
+  }
+  if (!rows[idx]) rows[idx] = {};
+  rows[idx][key] = val;
+
+  debounceTimer = setTimeout(async () => {
+    try {
+      await saveRows(currentArtist, rows);
+      setSaveStatus('saved');
+    } catch(e) {
+      setSaveStatus('error');
+    }
+  }, 800);
+}
+
+async function addRow() {
+  setSaveStatus('saving');
+  const snap = await getDoc(doc(db, COLLECTION, docId(currentArtist)));
+  const rows = snap.exists() ? (snap.data().rows || []) : [];
+  if (rows.length === 0 || rows[0].__fixed !== true) {
+    rows.unshift({ __fixed: true, name: '未確定', count: '', note: '' });
+  }
+  rows.push({ name: '', count: '', note: '' });
+  try {
+    await saveRows(currentArtist, rows);
+    setSaveStatus('saved');
+    setTimeout(() => {
+      const inputs = document.querySelectorAll('#artist-rows .row:last-child input');
+      if (inputs[0]) inputs[0].focus();
+    }, 300);
+  } catch(e) { setSaveStatus('error'); }
+}
+
+async function deleteRow(idx) {
+  if (idx === 0) return;
+  setSaveStatus('saving');
+  const snap = await getDoc(doc(db, COLLECTION, docId(currentArtist)));
+  const rows = snap.exists() ? (snap.data().rows || []) : [];
+  rows.splice(idx, 1);
+  try {
+    await saveRows(currentArtist, rows);
+    setSaveStatus('saved');
+  } catch(e) { setSaveStatus('error'); }
+}
+
+function updateSummary(rows) {
+  document.getElementById('sum-total').textContent = rows.reduce((s, r) => s + (parseInt(r.count) || 0), 0);
+}
+
+function setSaveStatus(state) {
+  const el = document.getElementById('save-status');
+  clearTimeout(saveTimer);
+  if (state === 'saving') { el.textContent = '保存中...'; el.className = 'save-status saving'; }
+  else if (state === 'saved') {
+    el.textContent = '保存しました ✓'; el.className = 'save-status saved';
+    saveTimer = setTimeout(() => { el.textContent = '— 自動保存'; el.className = 'save-status'; }, 2000);
+  } else if (state === 'error') { el.textContent = '保存に失敗しました'; el.className = 'save-status error'; }
+}
+
+// 管理者
+function toggleAdmin() {
+  if (document.getElementById('page-admin').classList.contains('active')) {
+    showPage('page-artist');
+  } else {
+    showPage('page-admin');
+    if (adminUnlocked) loadAdminData();
+    else setTimeout(() => document.getElementById('pw-input').focus(), 100);
+  }
+}
+
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  document.getElementById('nav-btn').textContent = id === 'page-admin' ? '← 戻る' : '管理者画面';
+  if (id === 'page-artist') renderArtistPage();
+}
+
+window.checkPw = function() {
+  const val = document.getElementById('pw-input').value;
+  if (val === ADMIN_PW) {
+    adminUnlocked = true;
+    document.getElementById('pw-overlay').style.display = 'none';
+    loadAdminData();
+  } else {
+    document.getElementById('pw-error').textContent = 'パスワードが違います';
+    document.getElementById('pw-input').value = '';
+  }
+};
+
+async function loadAdminData() {
+  document.getElementById('admin-totals').innerHTML = '<div style="font-family:var(--mono);font-size:12px;color:var(--text3);">読み込み中...</div>';
+
+  const allRows = await Promise.all(ARTISTS.map((_, i) => loadRows(i)));
+
+  // 合計カード
+  document.getElementById('admin-totals').innerHTML = ARTISTS.map((a, i) => {
+    const rows = allRows[i];
+    const total = rows.reduce((s, r) => s + (parseInt(r.count) || 0), 0);
+    const count = rows.filter(r => r.name && r.name.trim() && r.__fixed !== true).length;
+    return `<div class="total-card">
+      <div class="total-artist">${a}</div>
+      <div class="total-num">${total}</div>
+      <div class="total-sub">${count} 件</div>
+    </div>`;
+  }).join('');
+
+  // 各セクション
+  document.getElementById('admin-sections').innerHTML = ARTISTS.map((a, i) => {
+    const rows = allRows[i];
+    const rowsHtml = rows.length === 0
+      ? `<div class="admin-row"><div class="admin-cell empty" style="grid-column:1/-1;padding:12px 10px;">データなし</div></div>`
+      : rows.map((r, j) => `
+        <div class="admin-row" style="${r.__fixed ? 'background:rgba(200,240,96,0.04)' : ''}">
+          <div class="admin-cell idx" style="${r.__fixed ? 'color:var(--accent)' : ''}">${r.__fixed ? '★' : j}</div>
+          <div class="admin-cell" style="${r.__fixed ? 'color:var(--accent);font-weight:500' : ''}">${r.name || '<span style="color:var(--text3)">—</span>'}</div>
+          <div class="admin-cell num">${r.count || '—'}</div>
+          <div class="admin-cell">${r.note || ''}</div>
+        </div>`).join('');
+    return `<div class="admin-section">
+      <div class="admin-section-title">${a}</div>
+      <div class="admin-sheet">
+        <div class="admin-sheet-head">
+          <div class="sh">#</div><div class="sh">代表者名</div><div class="sh" style="text-align:right;">人数</div><div class="sh">備考</div>
+        </div>
+        ${rowsHtml}
+      </div>
+    </div>`;
+  }).join('');
+
+  // URL一覧
+  const base = location.origin + location.pathname;
+  document.getElementById('url-list').innerHTML = ARTISTS.map((a, i) => {
+    const url = `${base}?a=${i}`;
+    return `<div class="url-item">
+      <span class="url-artist">${a}</span>
+      <span class="url-val">${url}</span>
+      <button class="copy-btn" onclick="copyUrl('${url}', this)">コピー</button>
+    </div>`;
+  }).join('');
+}
+
+window.copyUrl = function(url, btn) {
+  navigator.clipboard.writeText(url).then(() => {
+    btn.textContent = '完了 ✓'; btn.classList.add('done');
+    setTimeout(() => { btn.textContent = 'コピー'; btn.classList.remove('done'); }, 2000);
+  });
+};
+
+window.addRow = addRow;
+window.toggleAdmin = toggleAdmin;
+
+// 初期化
+currentArtist = getArtistFromUrl();
+renderArtistPage();
+</script>
+</body>
+</html>
