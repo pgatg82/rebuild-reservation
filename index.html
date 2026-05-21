@@ -116,6 +116,8 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); min-
 .nav-admin-btn { background: none; border: 1px solid var(--border2); border-radius: 6px; padding: 6px 12px; color: var(--text2); font-size: 11px; font-family: var(--mono); cursor: pointer; transition: all 0.15s; }
 .nav-admin-btn:hover { border-color: var(--accent); color: var(--accent); }
 .pb { padding-bottom: 60px; }
+.export-btn { background: var(--surface); border: 1px solid var(--border2); border-radius: 8px; padding: 10px 14px; color: var(--accent); font-size: 13px; font-family: var(--mono); cursor: pointer; transition: all 0.15s; text-align: left; }
+.export-btn:hover { border-color: var(--accent); background: rgba(200,240,96,0.06); }
 
 @media (max-width: 480px) {
   .artist-header, .sheet-wrap, .admin-body { padding: 1rem; }
@@ -187,6 +189,17 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); min-
       <div class="url-section">
         <div class="admin-section-title">共有URL</div>
         <div class="url-list" id="url-list"></div>
+      </div>
+
+      <div style="margin-top:2rem;">
+        <div class="admin-section-title">エクセル出力</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;">
+          <button class="export-btn" onclick="exportExcel(-1)">全出演者まとめて</button>
+          <button class="export-btn" onclick="exportExcel(0)">Build Your Mind</button>
+          <button class="export-btn" onclick="exportExcel(1)">V-trap</button>
+          <button class="export-btn" onclick="exportExcel(2)">飽き性</button>
+          <button class="export-btn" onclick="exportExcel(3)">The Black Borders</button>
+        </div>
       </div>
     </div>
   </div>
@@ -478,6 +491,51 @@ window.copyUrl = function(url, btn) {
     btn.textContent = '完了 ✓'; btn.classList.add('done');
     setTimeout(() => { btn.textContent = 'コピー'; btn.classList.remove('done'); }, 2000);
   });
+};
+
+window.exportExcel = async function(artistIdx) {
+  const targets = artistIdx === -1 ? ARTISTS.map((_, i) => i) : [artistIdx];
+  const allRows = await Promise.all(targets.map(i => loadRows(i)));
+
+  // CSVデータ作成（Excel対応UTF-8 BOM付き）
+  let csv = '﻿';
+
+  if (artistIdx === -1) {
+    // 全出演者まとめ
+    csv += '出演者,代表者名,人数,備考
+';
+    targets.forEach((ti, si) => {
+      allRows[si].forEach(r => {
+        const name = r.__fixed ? '未確定' : (r.name || '');
+        if (!name && !r.count) return;
+        csv += `"${ARTISTS[ti]}","${name}","${r.count || ''}","${(r.note || '').replace(/"/g,'""')}"
+`;
+      });
+    });
+  } else {
+    // 個別出演者
+    csv += `6/20 SAT RE:BUILD — ${ARTISTS[artistIdx]} 取り置きリスト
+`;
+    csv += '代表者名,人数,備考
+';
+    allRows[0].forEach(r => {
+      const name = r.__fixed ? '未確定' : (r.name || '');
+      if (!name && !r.count) return;
+      csv += `"${name}","${r.count || ''}","${(r.note || '').replace(/"/g,'""')}"
+`;
+    });
+    // 合計行
+    const total = allRows[0].reduce((s, r) => s + (parseInt(r.count) || 0), 0);
+    csv += `"合計","${total}",""
+`;
+  }
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const fname = artistIdx === -1 ? '全出演者_取り置きリスト.csv' : `${ARTISTS[artistIdx]}_取り置きリスト.csv`;
+  a.href = url; a.download = fname; a.click();
+  URL.revokeObjectURL(url);
 };
 
 window.addRow = addRow;
